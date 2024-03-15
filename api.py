@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from pathlib import Path
 import pytorch_lightning as pl
 import torch
@@ -6,8 +7,12 @@ from huggingface_hub import snapshot_download
 from omegaconf import OmegaConf
 from mGPT.data.build_data import build_data
 from mGPT.models.build_model import build_model
+import uvicorn
 
-app = Flask(__name__)
+app = FastAPI()
+
+class MotionRequest(BaseModel):
+    text: str
 
 def load_cfg_from_file(file_path):
     cfg = OmegaConf.load(file_path)
@@ -35,10 +40,9 @@ def setup_model():
 
 model, device = setup_model()
 
-@app.route('/generate_motion', methods=['POST'])
-def generate_motion():
-    data = request.json
-    input_text = data['text']
+@app.post("/generate_motion")
+def generate_motion(request: MotionRequest):
+    input_text = request.text
     
     # Assuming `model` and `device` are already set up
     motion_uploaded = {
@@ -59,9 +63,11 @@ def generate_motion():
     
     outputs = model(batch, task="t2m")
     
-    motion_output = outputs
+    joints = outputs['joints'].cpu().numpy().tolist() if outputs['joints'].is_cuda else outputs['joints'].numpy().tolist()
+    length = outputs['length']  # Assuming 'length' is already in a simple, serializable format
     
-    return jsonify(motion_output)
+    return {"joints": joints, "length": length}
 
-if __name__ == '__main__':
-    app.run(debug=True, port=9880)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9880)

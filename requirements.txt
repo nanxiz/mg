@@ -35,5 +35,3 @@ natsort
 moviepy
 librosa
 torch==2.0.0
-gradio
-flask --no-deps
