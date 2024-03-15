@@ -1,0 +1,242 @@
+SEED_VALUE: 1234
+DEBUG: false
+FULL_CONFIG: false
+TRAIN:
+  SPLIT: train
+  NUM_WORKERS: 32
+  BATCH_SIZE: 16
+  END_EPOCH: 99999
+  RESUME: ''
+  PRETRAINED_VAE: ''
+  PRETRAINED: ''
+  OPTIM:
+    target: AdamW
+    params:
+      lr: 0.0002
+      betas:
+      - 0.9
+      - 0.99
+      weight_decay: 0.0
+    TYPE: AdamW
+    LR: 0.0002
+    WEIGHT_DECAY: 0.0
+    LR_SCHEDULER:
+    - 100
+    - 200
+    - 300
+    - 400
+    GAMMA: 0.8
+  LR_SCHEDULER:
+    target: CosineAnnealingLR
+    params:
+      T_max: ${eval:${LOGGER.VAL_EVERY_STEPS} * 100}
+      eta_min: 1.0e-06
+  STAGE: lm_instruct
+  DATASETS:
+  - humanml3d
+  START_EPOCH: 0
+  ABLATION:
+    pkeep: 0.5
+EVAL:
+  SPLIT: test
+  BATCH_SIZE: 32
+  NUM_WORKERS: 8
+  DATASETS:
+  - humanml3d
+TEST:
+  CHECKPOINTS: checkpoints/MotionGPT-base/motiongpt_s3_h3d.ckpt
+  SPLIT: test
+  BATCH_SIZE: 32
+  NUM_WORKERS: 8
+  SAVE_PREDICTIONS: false
+  COUNT_TIME: false
+  REPLICATION_TIMES: 20
+  REP_I: 0
+  DATASETS:
+  - humanml3d
+  MEAN: false
+  NUM_SAMPLES: 1
+  FACT: 1
+  FOLDER: results
+model:
+  target: mGPT.models.mgpt.MotionGPT
+  params:
+    condition: text
+    task: t2m
+    lm: ${lm.default}
+    motion_vae: ${vq.default}
+    stage: ${TRAIN.STAGE}
+    debug: ${DEBUG}
+    codebook_size: ${model.params.motion_vae.params.code_num}
+    metrics_dict: ${METRIC.TYPE}
+  whisper_path: openai/whisper-large-v2
+LOSS:
+  LAMBDA_REC: 1.0
+  LAMBDA_JOINT: 1.0
+  LAMBDA_LATENT: 1.0e-05
+  LAMBDA_KL: 1.0e-05
+  LAMBDA_GEN: 1.0
+  LAMBDA_CROSS: 1.0
+  LAMBDA_CYCLE: 1.0
+  LAMBDA_PRIOR: 0.0
+  LAMBDA_VELOCITY: 0.5
+  LAMBDA_COMMIT: 0.02
+  ABLATION:
+    RECONS_LOSS: l1_smooth
+  TYPE: t2mgpt
+  LAMBDA_FEATURE: 1.0
+  LAMBDA_CLS: 1.0
+  LAMBDA_M2T2M: 1.0
+  LAMBDA_T2M2T: 10.0
+METRIC:
+  TASK: t2m
+  FORCE_IN_METER: true
+  DIST_SYNC_ON_STEP: true
+  MM_NUM_SAMPLES: 100
+  MM_NUM_REPEATS: 30
+  MM_NUM_TIMES: 10
+  DIVERSITY_TIMES: 300
+  TM2T:
+    t2m_textencoder:
+      target: mGPT.archs.tm2t_evaluator.TextEncoderBiGRUCo
+      params:
+        word_size: 300
+        pos_size: 15
+        hidden_size: 512
+        output_size: 512
+    t2m_moveencoder:
+      target: mGPT.archs.tm2t_evaluator.MovementConvEncoder
+      params:
+        input_size: ${eval:${DATASET.NFEATS} - 4}
+        hidden_size: 512
+        output_size: 512
+    t2m_motionencoder:
+      target: mGPT.archs.tm2t_evaluator.MotionEncoderBiGRUCo
+      params:
+        input_size: ${evaluator.tm2t.t2m_moveencoder.params.output_size}
+        hidden_size: 1024
+        output_size: 512
+    t2m_path: deps/t2m/
+  TYPE:
+  - TM2TMetrics
+DATASET:
+  target: mGPT.data.HumanML3D.HumanML3DDataModule
+  CODE_PATH: VQBEST
+  TASK_ROOT: deps/mGPT_instructions
+  TASK_PATH: ''
+  NFEATS: 263
+  KIT:
+    MAX_MOTION_LEN: 196
+    MIN_MOTION_LEN: 24
+    MAX_TEXT_LEN: 20
+    PICK_ONE_TEXT: true
+    FRAME_RATE: 12.5
+    UNIT_LEN: 4
+    ROOT: datasets/kit-ml
+    SPLIT_ROOT: datasets/kit-ml
+    MEAN_STD_PATH: deps/t2m/
+  HUMANML3D:
+    MAX_MOTION_LEN: 196
+    MIN_MOTION_LEN: 40
+    MAX_TEXT_LEN: 20
+    PICK_ONE_TEXT: true
+    FRAME_RATE: 20.0
+    UNIT_LEN: 4
+    STD_TEXT: false
+    ROOT: datasets/humanml3d
+    SPLIT_ROOT: datasets/humanml3d
+    MEAN_STD_PATH: deps/t2m/
+  JOINT_TYPE: humanml3d
+  SMPL_PATH: deps/smpl
+  TRANSFORM_PATH: deps/transforms/
+  WORD_VERTILIZER_PATH: deps/glove/
+ABLATION:
+  use_length: false
+  predict_ratio: 0.2
+  inbetween_ratio: 0.25
+  image_size: 256
+  VAE_TYPE: actor
+  VAE_ARCH: encoder_decoder
+  PE_TYPE: actor
+  DIFF_PE_TYPE: actor
+  SKIP_CONNECT: false
+  MLP_DIST: false
+  IS_DIST: false
+  PREDICT_EPSILON: true
+LOGGER:
+  VAL_EVERY_STEPS: 10
+  LOGGERS:
+  - tensorboard
+  - wandb
+  TENSORBOARD: true
+  WANDB:
+    target: pytorch_lightning.loggers.WandbLogger
+    params:
+      project: null
+      offline: false
+      id: null
+      version: ''
+      name: ${NAME}
+      save_dir: ${FOLDER_EXP}
+  LOG_EVERY_STEPS: 5
+  wandb:
+    params:
+      project: null
+NAME: Webui
+ACCELERATOR: cpu
+DEVICE:
+- 0
+vq:
+  default:
+    target: mGPT.archs.mgpt_vq.VQVae
+    params:
+      quantizer: ema_reset
+      code_num: 512
+      code_dim: 512
+      output_emb_width: 512
+      down_t: 2
+      stride_t: 2
+      width: 512
+      depth: 3
+      dilation_growth_rate: 3
+      norm: None
+      activation: relu
+      nfeats: ${DATASET.NFEATS}
+      ablation: ${ABLATION}
+lm:
+  default:
+    target: mGPT.archs.mgpt_lm.MLM
+    params:
+      model_type: t5
+      model_path: google/flan-t5-base
+      stage: ${TRAIN.STAGE}
+      motion_codebook_size: ${model.params.codebook_size}
+      ablation: ${ABLATION}
+evaluator:
+  tm2t:
+    t2m_textencoder:
+      target: mGPT.archs.tm2t_evaluator.TextEncoderBiGRUCo
+      params:
+        word_size: 300
+        pos_size: 15
+        hidden_size: 512
+        output_size: 512
+    t2m_moveencoder:
+      target: mGPT.archs.tm2t_evaluator.MovementConvEncoder
+      params:
+        input_size: ${eval:${DATASET.NFEATS} - 4}
+        hidden_size: 512
+        output_size: 512
+    t2m_motionencoder:
+      target: mGPT.archs.tm2t_evaluator.MotionEncoderBiGRUCo
+      params:
+        input_size: ${evaluator.tm2t.t2m_moveencoder.params.output_size}
+        hidden_size: 1024
+        output_size: 512
+CONFIG_FOLDER: configs
+FOLDER: cache
+RENDER:
+  BLENDER_PATH: libs/blender-2.93.2-linux-x64/blender
+  SMPL_MODEL_PATH: deps/smpl/smpl_models/smpl
+  MODEL_PATH: deps/smpl/smpl_models/
+  FACES_PATH: deps/smplh/smplh.faces
