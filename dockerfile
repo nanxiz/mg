@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:1.8.1-cuda11.1-cudnn8-runtime
+FROM cnstark/pytorch:2.0.1-py3.9.17-cuda11.8.0-ubuntu20.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
