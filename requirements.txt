@@ -3,8 +3,8 @@ tensorboard
 pytorch_lightning
 torchmetrics
 omegaconf
-shortuuid
-chumpy
+#shortuuid
+#chumpy
 transformers
 diffusers
 einops

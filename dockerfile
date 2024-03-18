@@ -12,7 +12,10 @@ WORKDIR /workspace
 RUN git clone --depth 1 https://github.com/nanxiz/mg.git /workspace
 
 # COPY requirements.txt /workspace
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# RUN pip install --no-cache-dir -r requirements.txt
 
 # COPY handler.py /workspace
 
